@@ -1,0 +1,26 @@
+{
+  "name": "sonido-vivo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"css/**/*.css\" \"*.{html,ts,js,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"css/**/*.css\" \"*.{html,ts,js,json}\""
+  },
+  "dependencies": {
+    "axios": "^1.21.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.18.4",
+    "vite": "^8.3.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "prettier": "^3.10.1",
+    "typescript": "~5.8.3"
+  }
+}

@@ -8,7 +8,6 @@ export interface AuthResponse {
   id: number;
   token: string;
   tipo: string;
-  refreshToken: string;
   nombre: string;
   email: string;
   rol: string;
@@ -24,7 +23,7 @@ type ReintentableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
 const TOKEN = "sonidovivo_token";
 const REFRESH_TOKEN = "sonidovivo_refresh_token";
 const BASE_URL = (
-  import.meta.env.VITE_API_URL || "http://localhost:8081/api/v1"
+  import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1"
 ).replace(/\/+$/, "");
 
 export const api = axios.create({
@@ -32,35 +31,22 @@ export const api = axios.create({
   timeout: 10000,
 });
 
-let tokenAcceso: string | null =
-  localStorage.getItem(TOKEN) ?? sessionStorage.getItem(TOKEN);
+let tokenAcceso: string | null = null;
 let refreshEnCurso: Promise<AuthResponse> | null = null;
 
 export function configurarTokenAcceso(token: string | null) {
   tokenAcceso = token;
-  if (token) {
-    localStorage.setItem(TOKEN, token);
-    sessionStorage.removeItem(TOKEN);
-  } else {
-    localStorage.removeItem(TOKEN);
-    sessionStorage.removeItem(TOKEN);
-  }
+  localStorage.removeItem(TOKEN);
+  sessionStorage.removeItem(TOKEN);
 }
 
 export function renovarSesion(): Promise<AuthResponse> {
   if (!refreshEnCurso) {
-    const refreshToken =
-      localStorage.getItem(REFRESH_TOKEN) ??
-      sessionStorage.getItem(REFRESH_TOKEN);
-    if (!refreshToken) {
-      return Promise.reject(new Error("No hay un token de renovación."));
-    }
-
-    refreshEnCurso = axios
-      .post<AuthResponse>(`${BASE_URL}/auth/refresh`, { refreshToken })
+    refreshEnCurso = api
+      .post<AuthResponse>("/auth/refresh", undefined, {
+        withCredentials: true,
+      })
       .then(({ data }) => {
-        localStorage.setItem(REFRESH_TOKEN, data.refreshToken);
-        sessionStorage.removeItem(REFRESH_TOKEN);
         configurarTokenAcceso(data.token);
         window.dispatchEvent(
           new CustomEvent<AuthResponse>("sonidovivo:session-refreshed", {

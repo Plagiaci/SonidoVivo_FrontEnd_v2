@@ -6,17 +6,16 @@ import { formatearPrecio } from "../../utils/formatoPrecio";
 type PeriodoReporte = "SEMANA" | "MES" | "ANIO";
 
 interface ProductoMasSolicitado {
-  productoId: string;
   nombre: string;
-  unidades: number;
+  unidadesVendidas: number;
 }
 
 interface ReporteVentas {
   periodo: PeriodoReporte;
   desde: string;
   hasta: string;
-  operaciones: number;
-  montoVendido: number;
+  totalPedidos: number;
+  montoTotalVendido: number;
   unidadesVendidas: number;
   productosMasSolicitados: ProductoMasSolicitado[];
 }
@@ -44,7 +43,7 @@ export function AdminReportsPage() {
     setError("");
 
     api
-      .get<ReporteVentas>("/admin/reportes", { params: { periodo } })
+      .get<ReporteVentas>("/reportes", { params: { periodo } })
       .then(({ data }) => {
         if (activo) setReporte(data);
       })
@@ -131,14 +130,14 @@ export function AdminReportsPage() {
               <div className="col-12 col-md-4">
                 <article className="border rounded p-3 h-100">
                   <p className="text-secondary mb-1">Pedidos válidos</p>
-                  <p className="h3 fw-bold mb-0">{reporte.operaciones}</p>
+                  <p className="h3 fw-bold mb-0">{reporte.totalPedidos}</p>
                 </article>
               </div>
               <div className="col-12 col-md-4">
                 <article className="border rounded p-3 h-100">
                   <p className="text-secondary mb-1">Monto vendido</p>
                   <p className="h3 fw-bold mb-0">
-                    {formatearPrecio(reporte.montoVendido)}
+                    {formatearPrecio(reporte.montoTotalVendido)}
                   </p>
                 </article>
               </div>
@@ -166,9 +165,11 @@ export function AdminReportsPage() {
                   </thead>
                   <tbody>
                     {reporte.productosMasSolicitados.map((producto) => (
-                      <tr key={producto.productoId}>
+                      <tr key={producto.nombre}>
                         <td>{producto.nombre}</td>
-                        <td className="text-end">{producto.unidades}</td>
+                        <td className="text-end">
+                          {producto.unidadesVendidas}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

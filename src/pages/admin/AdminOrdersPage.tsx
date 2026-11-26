@@ -5,7 +5,12 @@ import { Mensaje } from "../../components/PageHelpers";
 import { formatearPrecio } from "../../utils/formatoPrecio";
 
 type EstadoPedido =
-  "PENDIENTE" | "PREPARANDO" | "ENVIADO" | "ENTREGADO" | "CANCELADO";
+  | "PENDIENTE"
+  | "CONFIRMADO"
+  | "EN_PREPARACION"
+  | "ENVIADO"
+  | "ENTREGADO"
+  | "CANCELADO";
 
 interface DetallePedido {
   productoId: string;
@@ -26,8 +31,9 @@ interface Pedido {
 }
 
 const estadosSiguientes: Record<EstadoPedido, EstadoPedido[]> = {
-  PENDIENTE: ["PREPARANDO", "CANCELADO"],
-  PREPARANDO: ["ENVIADO", "CANCELADO"],
+  PENDIENTE: ["CONFIRMADO", "CANCELADO"],
+  CONFIRMADO: ["EN_PREPARACION", "CANCELADO"],
+  EN_PREPARACION: ["ENVIADO", "CANCELADO"],
   ENVIADO: ["ENTREGADO"],
   ENTREGADO: [],
   CANCELADO: [],

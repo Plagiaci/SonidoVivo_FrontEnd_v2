@@ -44,10 +44,16 @@ export function Login() {
     if (!password) return setMensaje("Debe ingresar su contraseña.");
 
     try {
-      const { data } = await api.post<AuthResponse>("/auth/login", {
-        correo,
-        password,
-      });
+      const { data } = await api.post<AuthResponse>(
+        "/auth/login",
+        {
+          correo,
+          password,
+        },
+        {
+          withCredentials: true,
+        },
+      );
       establecerSesion(data);
       navigate(data.rol === "CLIENTE" ? "/catalogo" : "/gestion");
       formElement.reset();

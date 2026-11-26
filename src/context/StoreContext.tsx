@@ -49,11 +49,12 @@ interface UsuarioApi {
   nombre: string;
   apellido: string;
   fechaNacimiento: string;
-  email: string;
+  correo: string;
   direccion: string;
   region: string;
   genero: string;
   rol: string;
+  bloqueado: boolean;
 }
 
 interface StoreContextValue {
@@ -126,13 +127,13 @@ function convertirUsuarioApi(usuario: UsuarioApi): Usuario {
     nombre: usuario.nombre,
     apellido: usuario.apellido,
     fechaNacimiento: usuario.fechaNacimiento,
-    correo: usuario.email,
+    correo: usuario.correo,
     password: "",
     direccion: usuario.direccion,
     region: usuario.region,
     genero: usuario.genero,
     intentosFallidos: 0,
-    bloqueado: false,
+    bloqueado: usuario.bloqueado,
     rol,
   };
 }
@@ -143,10 +144,11 @@ function usuarioDesdeAuth(sesion: AuthResponse): Usuario {
     nombre: sesion.nombre,
     apellido: sesion.apellido ?? "",
     fechaNacimiento: sesion.fechaNacimiento ?? "",
-    email: sesion.email,
+    correo: sesion.email,
     direccion: sesion.direccion ?? "",
     region: sesion.region ?? "",
     genero: sesion.genero ?? "",
+    bloqueado: false,
     rol: sesion.rol,
   };
   return convertirUsuarioApi(usuario);
@@ -157,7 +159,7 @@ function payloadUsuario(usuario: Usuario) {
     nombre: usuario.nombre,
     apellido: usuario.apellido,
     fechaNacimiento: usuario.fechaNacimiento,
-    email: usuario.correo,
+    correo: usuario.correo,
     ...(usuario.password ? { password: usuario.password } : {}),
     direccion: usuario.direccion,
     region: usuario.region,
@@ -174,19 +176,11 @@ function errorDeApi(error: unknown, fallback: string): string {
 
 function cargarSesion(): Usuario | null {
   configurarTokenAcceso(null);
-  const sesion =
-    localStorage.getItem(CLAVE_SESION) ??
-    sessionStorage.getItem(CLAVE_SESION);
-  const refreshToken =
-    localStorage.getItem("sonidovivo_refresh_token") ??
-    sessionStorage.getItem("sonidovivo_refresh_token");
-  if (!sesion || !refreshToken) {
-    localStorage.removeItem(CLAVE_SESION);
-    localStorage.removeItem("sonidovivo_refresh_token");
-    sessionStorage.removeItem(CLAVE_SESION);
-    sessionStorage.removeItem("sonidovivo_refresh_token");
-    return null;
-  }
+  localStorage.removeItem(CLAVE_SESION);
+  localStorage.removeItem("sonidovivo_refresh_token");
+  sessionStorage.removeItem("sonidovivo_refresh_token");
+  const sesion = sessionStorage.getItem(CLAVE_SESION);
+  if (!sesion) return null;
 
   try {
     const usuario = JSON.parse(sesion) as Usuario;
@@ -197,16 +191,10 @@ function cargarSesion(): Usuario | null {
     ) {
       throw new Error("Sesión inválida");
     }
-    localStorage.setItem(CLAVE_SESION, JSON.stringify(usuario));
-    localStorage.setItem("sonidovivo_refresh_token", refreshToken);
-    sessionStorage.removeItem(CLAVE_SESION);
-    sessionStorage.removeItem("sonidovivo_refresh_token");
     return { ...usuario, password: "" };
   } catch {
-    localStorage.removeItem(CLAVE_SESION);
-    localStorage.removeItem("sonidovivo_refresh_token");
     sessionStorage.removeItem(CLAVE_SESION);
-    sessionStorage.removeItem("sonidovivo_refresh_token");
+    configurarTokenAcceso(null);
     return null;
   }
 }
@@ -332,7 +320,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
     setUsuariosCargando(true);
     api
-      .get<UsuarioApi[]>("/admin/usuarios")
+      .get<UsuarioApi[]>("/usuarios")
       .then(({ data }) => {
         if (activo) {
           setUsuarios(data.map(convertirUsuarioApi));
@@ -363,10 +351,11 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (usuarioActual) {
-      localStorage.setItem(
+      sessionStorage.setItem(
         CLAVE_SESION,
         JSON.stringify({ ...usuarioActual, password: "" }),
       );
+      localStorage.removeItem(CLAVE_SESION);
     } else {
       localStorage.removeItem(CLAVE_SESION);
       sessionStorage.removeItem(CLAVE_SESION);
@@ -465,25 +454,23 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         return null;
       },
       establecerSesion: (sesion) => {
-        localStorage.setItem("sonidovivo_refresh_token", sesion.refreshToken);
         configurarTokenAcceso(sesion.token);
-        setUsuarioActual(usuarioDesdeAuth(sesion));
+        const usuario = usuarioDesdeAuth(sesion);
+        sessionStorage.setItem(CLAVE_SESION, JSON.stringify(usuario));
+        setUsuarioActual(usuario);
       },
       cerrarSesion: async () => {
-        const refreshToken =
-          localStorage.getItem("sonidovivo_refresh_token") ??
-          sessionStorage.getItem("sonidovivo_refresh_token");
         configurarTokenAcceso(null);
         let errorCierre: string | null = null;
-        if (refreshToken) {
-          try {
-            await api.post("/auth/logout", { refreshToken });
-          } catch (error) {
-            errorCierre = errorDeApi(
-              error,
-              "La sesión local se cerró, pero no se pudo invalidar la sesión del servidor.",
-            );
-          }
+        try {
+          await api.post("/auth/logout", undefined, {
+            withCredentials: true,
+          });
+        } catch (error) {
+          errorCierre = errorDeApi(
+            error,
+            "La sesión local se cerró, pero no se pudo invalidar la sesión del servidor.",
+          );
         }
         setUsuarioActual(null);
         setCarrito([]);
@@ -495,7 +482,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
       },
       actualizarPerfil: async (usuario) => {
         try {
-          const { data } = await api.put<AuthResponse>("/auth/profile", {
+          const { data } = await api.put<UsuarioApi>("/usuarios/me", {
             nombre: usuario.nombre,
             apellido: usuario.apellido,
             fechaNacimiento: usuario.fechaNacimiento,
@@ -504,9 +491,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             region: usuario.region,
             genero: usuario.genero,
           });
-          localStorage.setItem("sonidovivo_refresh_token", data.refreshToken);
-          configurarTokenAcceso(data.token);
-          const actualizado = usuarioDesdeAuth(data);
+          const actualizado = convertirUsuarioApi(data);
           setUsuarioActual(actualizado);
           return null;
         } catch (error) {
@@ -545,7 +530,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             const anterior = usuarios.find((item) => item.id === usuario.id);
             if (!anterior) {
               const { data } = await api.post<UsuarioApi>(
-                "/admin/usuarios",
+                "/usuarios",
                 payloadUsuario(usuario),
               );
               usuariosGuardados.push(convertirUsuarioApi(data));
@@ -564,7 +549,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const { data } = await api.put<UsuarioApi>(
-              `/admin/usuarios/${encodeURIComponent(usuario.id)}`,
+              `/usuarios/${encodeURIComponent(usuario.id)}`,
               payloadUsuario(usuario),
             );
             usuariosGuardados.push(convertirUsuarioApi(data));
@@ -572,14 +557,12 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
           for (const anterior of usuarios) {
             if (!idsActualizados.has(anterior.id)) {
-              await api.delete(
-                `/admin/usuarios/${encodeURIComponent(anterior.id)}`,
-              );
+              await api.delete(`/usuarios/${encodeURIComponent(anterior.id)}`);
             }
           }
 
           if (usuarioActual.rol === "administrador") {
-            const { data } = await api.get<UsuarioApi[]>("/admin/usuarios");
+            const { data } = await api.get<UsuarioApi[]>("/usuarios");
             setUsuarios(data.map(convertirUsuarioApi));
           } else {
             setUsuarios((actuales) => [...actuales, ...usuariosGuardados]);

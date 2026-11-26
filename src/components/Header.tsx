@@ -10,6 +10,7 @@ const navigation = [
 export const Header = () => {
   const { carrito, usuarioActual, cerrarSesion } = useStore();
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [mensajeCierre, setMensajeCierre] = useState("");
   const navigate = useNavigate();
   const cantidad = carrito.reduce((total, item) => total + item.cantidad, 0);
   const enlaces = [
@@ -25,8 +26,16 @@ export const Header = () => {
       : []),
   ];
 
+  const salir = async () => {
+    const error = await cerrarSesion();
+    setMensajeCierre(error ?? "");
+    setMenuAbierto(false);
+    navigate("/");
+  };
+
   return (
-    <nav className="navbar navbar-expand-lg bg-dark navbar-dark">
+    <>
+      <nav className="navbar navbar-expand-lg bg-dark navbar-dark">
       <div className="container">
         <NavLink className="navbar-brand fw-bold" to="/">
           Sonido Vivo
@@ -75,7 +84,8 @@ export const Header = () => {
                 <span className="badge text-bg-warning">{cantidad}</span>
               </NavLink>
             )}
-            {usuarioActual?.rol === "cliente" && (
+            {(usuarioActual?.rol === "cliente" ||
+              usuarioActual?.rol === "vendedor") && (
               <NavLink
                 to="/mis-pedidos"
                 className={({ isActive }) =>
@@ -98,11 +108,7 @@ export const Header = () => {
                 <button
                   className="btn btn-outline-light btn-sm my-1"
                   type="button"
-                  onClick={() => {
-                    cerrarSesion();
-                    setMenuAbierto(false);
-                    navigate("/");
-                  }}
+                  onClick={() => void salir()}
                 >
                   Cerrar sesión
                 </button>
@@ -110,7 +116,15 @@ export const Header = () => {
             )}
           </div>
         </div>
-      </div>
-    </nav>
+        </div>
+      </nav>
+      {mensajeCierre && (
+        <div className="container pt-3">
+          <div className="alert alert-warning mb-0" role="alert">
+            {mensajeCierre}
+          </div>
+        </div>
+      )}
+    </>
   );
 };

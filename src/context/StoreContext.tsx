@@ -7,15 +7,18 @@ import {
   type ReactNode,
 } from "react";
 import { isAxiosError } from "axios";
-import { api } from "../api/axiosConfig";
-import { productos as catalogoInicial } from "../data/Productos";
+import {
+  api,
+  configurarTokenAcceso,
+  renovarSesion,
+  type AuthResponse,
+} from "../api/axiosConfig";
 import type { Producto } from "../types/Producto";
 
-const CLAVE_PRODUCTOS = "sonidovivo_productos";
+export type { AuthResponse } from "../api/axiosConfig";
+
 const CLAVE_CARRITO = "sonidovivo_carrito";
-const CLAVE_USUARIOS = "sonidovivo_usuarios";
 const CLAVE_SESION = "sonidovivo_sesion";
-const CLAVE_CATEGORIAS = "sonidovivo_categorias";
 
 export type RolUsuario = "cliente" | "vendedor" | "administrador";
 
@@ -41,18 +44,16 @@ export interface Usuario {
   rol: RolUsuario;
 }
 
-export interface AuthResponse {
+interface UsuarioApi {
   id: number;
-  token: string;
-  tipo: string;
   nombre: string;
+  apellido: string;
+  fechaNacimiento: string;
   email: string;
+  direccion: string;
+  region: string;
+  genero: string;
   rol: string;
-  apellido: string | null;
-  fechaNacimiento: string | null;
-  direccion: string | null;
-  region: string | null;
-  genero: string | null;
 }
 
 interface StoreContextValue {
@@ -61,14 +62,19 @@ interface StoreContextValue {
   usuarios: Usuario[];
   usuarioActual: Usuario | null;
   categorias: string[];
+  catalogoCargando: boolean;
+  catalogoError: string;
+  usuariosCargando: boolean;
+  usuariosError: string;
   agregarAlCarrito: (idProducto: string) => boolean;
   cambiarCantidadCarrito: (idProducto: string, cantidad: number) => boolean;
   eliminarDelCarrito: (idProducto: string) => void;
   vaciarCarrito: () => void;
   finalizarCompra: () => Promise<string | null>;
   establecerSesion: (sesion: AuthResponse) => void;
-  cerrarSesion: () => void;
-  guardarUsuarios: (usuarios: Usuario[]) => void;
+  cerrarSesion: () => Promise<string | null>;
+  actualizarPerfil: (usuario: Usuario) => Promise<string | null>;
+  guardarUsuarios: (usuarios: Usuario[]) => Promise<string | null>;
   actualizarStock: (idProducto: string, stock: number) => Promise<boolean>;
   actualizarProducto: (producto: Producto) => Promise<boolean>;
   crearProducto: (producto: Producto) => Promise<boolean>;
@@ -107,107 +113,82 @@ function normalizarProducto(producto: Producto): Producto {
   return { ...producto, categoria: nombreCategoria };
 }
 
-function cargarProductos(): Producto[] {
-  const guardados = leerLocalStorage<Producto[]>(CLAVE_PRODUCTOS, []);
-
-  if (guardados.length > 0) {
-    return guardados.map(normalizarProducto);
-  }
-
-  localStorage.setItem(CLAVE_PRODUCTOS, JSON.stringify(catalogoInicial));
-
-  return catalogoInicial;
-}
-function cargarCategorias(): string[] {
-  const guardadas = localStorage.getItem(CLAVE_CATEGORIAS);
-
-  if (guardadas !== null) {
-    try {
-      const categoriasGuardadas = JSON.parse(guardadas) as unknown[];
-      const nombres = categoriasGuardadas.map((categoria) =>
-        typeof categoria === "string"
-          ? categoria
-          : categoria && typeof categoria === "object" && "nombre" in categoria
-            ? String((categoria as { nombre: unknown }).nombre)
-            : "",
-      );
-      return [...new Set(nombres.filter(Boolean))];
-    } catch {
-      localStorage.removeItem(CLAVE_CATEGORIAS);
-    }
-  }
-
-  const productosGuardados = leerLocalStorage<Producto[]>(
-    CLAVE_PRODUCTOS,
-    catalogoInicial,
-  );
-
-  const categoriasIniciales = [
-    ...new Set(productosGuardados.map((producto) => producto.categoria)),
-  ];
-
-  localStorage.setItem(CLAVE_CATEGORIAS, JSON.stringify(categoriasIniciales));
-
-  return categoriasIniciales;
-}
-
-function cargarUsuarios(): Usuario[] {
-  const guardados = leerLocalStorage<Partial<Usuario>[]>(CLAVE_USUARIOS, []);
-  const normalizados: Usuario[] = guardados.map((usuario) => ({
-    id: usuario.id ?? crypto.randomUUID(),
-    nombre: usuario.nombre ?? "",
-    apellido: usuario.apellido ?? "",
-    fechaNacimiento: usuario.fechaNacimiento ?? "",
-    correo: usuario.correo ?? "",
+function convertirUsuarioApi(usuario: UsuarioApi): Usuario {
+  const roles: Record<string, RolUsuario> = {
+    CLIENTE: "cliente",
+    VENDEDOR: "vendedor",
+    ADMINISTRADOR: "administrador",
+  };
+  const rol = roles[usuario.rol.toUpperCase()];
+  if (!rol) throw new Error("El backend devolvió un rol desconocido.");
+  return {
+    id: String(usuario.id),
+    nombre: usuario.nombre,
+    apellido: usuario.apellido,
+    fechaNacimiento: usuario.fechaNacimiento,
+    correo: usuario.email,
     password: "",
-    direccion: usuario.direccion ?? "",
-    region: usuario.region ?? "",
-    genero: usuario.genero ?? "",
-    intentosFallidos: usuario.intentosFallidos ?? 0,
-    bloqueado: usuario.bloqueado ?? false,
-    rol:
-      usuario.rol === "administrador" || usuario.rol === "vendedor"
-        ? usuario.rol
-        : "cliente",
-  }));
-  const usuariosSinDemo = normalizados.filter(
-    (usuario) =>
-      ![
-        "admin@sonidovivo.cl",
-        "vendedor@sonidovivo.cl",
-        "cliente@sonidovivo.cl",
-      ].includes(usuario.correo.toLowerCase()),
-  );
-  localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(usuariosSinDemo));
-  return usuariosSinDemo;
+    direccion: usuario.direccion,
+    region: usuario.region,
+    genero: usuario.genero,
+    intentosFallidos: 0,
+    bloqueado: false,
+    rol,
+  };
+}
+
+function usuarioDesdeAuth(sesion: AuthResponse): Usuario {
+  const usuario: UsuarioApi = {
+    id: sesion.id,
+    nombre: sesion.nombre,
+    apellido: sesion.apellido ?? "",
+    fechaNacimiento: sesion.fechaNacimiento ?? "",
+    email: sesion.email,
+    direccion: sesion.direccion ?? "",
+    region: sesion.region ?? "",
+    genero: sesion.genero ?? "",
+    rol: sesion.rol,
+  };
+  return convertirUsuarioApi(usuario);
+}
+
+function payloadUsuario(usuario: Usuario) {
+  return {
+    nombre: usuario.nombre,
+    apellido: usuario.apellido,
+    fechaNacimiento: usuario.fechaNacimiento,
+    email: usuario.correo,
+    ...(usuario.password ? { password: usuario.password } : {}),
+    direccion: usuario.direccion,
+    region: usuario.region,
+    genero: usuario.genero,
+    rol: usuario.rol.toUpperCase(),
+  };
+}
+
+function errorDeApi(error: unknown, fallback: string): string {
+  return isAxiosError<{ error?: string }>(error)
+    ? (error.response?.data?.error ?? fallback)
+    : fallback;
 }
 
 function cargarSesion(): Usuario | null {
-  const token = sessionStorage.getItem("sonidovivo_token");
-  const sesion = sessionStorage.getItem(CLAVE_SESION);
-  if (!token || !sesion) {
-    sessionStorage.removeItem("sonidovivo_token");
+  configurarTokenAcceso(null);
+  const sesion =
+    localStorage.getItem(CLAVE_SESION) ??
+    sessionStorage.getItem(CLAVE_SESION);
+  const refreshToken =
+    localStorage.getItem("sonidovivo_refresh_token") ??
+    sessionStorage.getItem("sonidovivo_refresh_token");
+  if (!sesion || !refreshToken) {
+    localStorage.removeItem(CLAVE_SESION);
+    localStorage.removeItem("sonidovivo_refresh_token");
     sessionStorage.removeItem(CLAVE_SESION);
+    sessionStorage.removeItem("sonidovivo_refresh_token");
     return null;
   }
 
   try {
-    const partes = token.split(".");
-    if (partes.length === 3) {
-      const payload = JSON.parse(
-        decodeURIComponent(
-          atob(partes[1].replace(/-/g, "+").replace(/_/g, "/"))
-            .split("")
-            .map((caracter) =>
-              `%${caracter.charCodeAt(0).toString(16).padStart(2, "0")}`,
-            )
-            .join(""),
-        ),
-      ) as { exp?: number };
-      if (payload.exp && payload.exp * 1000 <= Date.now()) {
-        throw new Error("Token expirado");
-      }
-    }
     const usuario = JSON.parse(sesion) as Usuario;
     if (
       !usuario.id ||
@@ -216,62 +197,83 @@ function cargarSesion(): Usuario | null {
     ) {
       throw new Error("Sesión inválida");
     }
+    localStorage.setItem(CLAVE_SESION, JSON.stringify(usuario));
+    localStorage.setItem("sonidovivo_refresh_token", refreshToken);
+    sessionStorage.removeItem(CLAVE_SESION);
+    sessionStorage.removeItem("sonidovivo_refresh_token");
     return { ...usuario, password: "" };
   } catch {
-    sessionStorage.removeItem("sonidovivo_token");
+    localStorage.removeItem(CLAVE_SESION);
+    localStorage.removeItem("sonidovivo_refresh_token");
     sessionStorage.removeItem(CLAVE_SESION);
+    sessionStorage.removeItem("sonidovivo_refresh_token");
     return null;
   }
 }
 
 export const StoreProvider = ({ children }: { children: ReactNode }) => {
-  const [productos, setProductos] = useState<Producto[]>(cargarProductos);
-  const [categorias, setCategorias] = useState<string[]>(cargarCategorias);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [catalogoCargando, setCatalogoCargando] = useState(true);
+  const [catalogoError, setCatalogoError] = useState("");
   const [carrito, setCarrito] = useState<ItemCarrito[]>(() =>
     leerLocalStorage<ItemCarrito[]>(CLAVE_CARRITO, []),
   );
-  const [usuarios, setUsuarios] = useState<Usuario[]>(cargarUsuarios);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuariosCargando, setUsuariosCargando] = useState(false);
+  const [usuariosError, setUsuariosError] = useState("");
+  const [usuariosCargados, setUsuariosCargados] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(
     cargarSesion,
   );
 
   useEffect(() => {
-    const cerrarSesionExpirada = () => setUsuarioActual(null);
+    const cerrarSesionExpirada = () => {
+      configurarTokenAcceso(null);
+      localStorage.removeItem("sonidovivo_refresh_token");
+      sessionStorage.removeItem("sonidovivo_refresh_token");
+      setUsuarioActual(null);
+      setCarrito([]);
+    };
+    const actualizarSesionRenovada = (evento: Event) => {
+      const sesion = (evento as CustomEvent<AuthResponse>).detail;
+      if (sesion) setUsuarioActual(usuarioDesdeAuth(sesion));
+    };
     window.addEventListener("sonidovivo:unauthorized", cerrarSesionExpirada);
-    return () =>
+    window.addEventListener(
+      "sonidovivo:session-refreshed",
+      actualizarSesionRenovada,
+    );
+    return () => {
       window.removeEventListener(
         "sonidovivo:unauthorized",
         cerrarSesionExpirada,
       );
+      window.removeEventListener(
+        "sonidovivo:session-refreshed",
+        actualizarSesionRenovada,
+      );
+    };
   }, []);
 
   useEffect(() => {
+    if (!usuarioActual) return;
     let activo = true;
 
-    api
-      .get<Producto[]>("/productos")
-      .then(({ data }) => {
-        if (!activo || !Array.isArray(data)) return;
-        const productosNormalizados = data.map(normalizarProducto);
-        const categoriasActualizadas = [
-          ...new Set(
-            productosNormalizados.map((producto) => producto.categoria),
-          ),
-        ];
-
-        localStorage.setItem(
-          CLAVE_PRODUCTOS,
-          JSON.stringify(productosNormalizados),
-        );
-        localStorage.setItem(
-          CLAVE_CATEGORIAS,
-          JSON.stringify(categoriasActualizadas),
-        );
-        setProductos(productosNormalizados);
-        setCategorias(categoriasActualizadas);
+    renovarSesion()
+      .then((sesion) => {
+        if (activo) setUsuarioActual(usuarioDesdeAuth(sesion));
       })
       .catch(() => {
-        // El catálogo local sigue disponible cuando el backend no responde.
+        if (activo) {
+          configurarTokenAcceso(null);
+          localStorage.removeItem("sonidovivo_refresh_token");
+          sessionStorage.removeItem("sonidovivo_refresh_token");
+          sessionStorage.removeItem(CLAVE_SESION);
+          localStorage.removeItem(CLAVE_SESION);
+          setUsuarioActual(null);
+          setCarrito([]);
+        }
       });
 
     return () => {
@@ -280,18 +282,94 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    let activo = true;
+
+    api
+      .get<Producto[]>("/productos")
+      .then(({ data }) => {
+        if (!activo) return;
+        if (!Array.isArray(data)) {
+          throw new Error("La respuesta del catálogo no es válida.");
+        }
+        const productosNormalizados = data.map(normalizarProducto);
+        const categoriasActualizadas = [
+          ...new Set(
+            productosNormalizados.map((producto) => producto.categoria),
+          ),
+        ];
+
+        setProductos(productosNormalizados);
+        setCategorias(categoriasActualizadas);
+        setCatalogoError("");
+      })
+      .catch(() => {
+        if (activo) {
+          setCatalogoError(
+            "No fue posible cargar el catálogo. Comprueba que el backend esté disponible.",
+          );
+        }
+      })
+      .finally(() => {
+        if (activo) setCatalogoCargando(false);
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let activo = true;
+    if (usuarioActual?.rol !== "administrador") {
+      setUsuarios([]);
+      setUsuariosError("");
+      setUsuariosCargando(false);
+      setUsuariosCargados(false);
+      return () => {
+        activo = false;
+      };
+    }
+
+    setUsuariosCargando(true);
+    api
+      .get<UsuarioApi[]>("/admin/usuarios")
+      .then(({ data }) => {
+        if (activo) {
+          setUsuarios(data.map(convertirUsuarioApi));
+          setUsuariosError("");
+          setUsuariosCargados(true);
+        }
+      })
+      .catch((error) => {
+        if (activo) {
+          setUsuariosError(
+            errorDeApi(error, "No fue posible cargar los usuarios."),
+          );
+          setUsuariosCargados(false);
+        }
+      })
+      .finally(() => {
+        if (activo) setUsuariosCargando(false);
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [usuarioActual?.rol]);
+
+  useEffect(() => {
     localStorage.setItem(CLAVE_CARRITO, JSON.stringify(carrito));
   }, [carrito]);
 
   useEffect(() => {
     if (usuarioActual) {
-      sessionStorage.setItem(
+      localStorage.setItem(
         CLAVE_SESION,
         JSON.stringify({ ...usuarioActual, password: "" }),
       );
     } else {
+      localStorage.removeItem(CLAVE_SESION);
       sessionStorage.removeItem(CLAVE_SESION);
-      sessionStorage.removeItem("sonidovivo_token");
     }
   }, [usuarioActual]);
 
@@ -299,6 +377,10 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     () => ({
       productos,
       categorias,
+      catalogoCargando,
+      catalogoError,
+      usuariosCargando,
+      usuariosError,
       carrito,
       usuarios,
       usuarioActual,
@@ -378,51 +460,137 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             ? { ...producto, stock: producto.stock - item.cantidad }
             : producto;
         });
-        localStorage.setItem(CLAVE_PRODUCTOS, JSON.stringify(actualizados));
         setProductos(actualizados);
         setCarrito([]);
         return null;
       },
       establecerSesion: (sesion) => {
-        const roles: Record<string, RolUsuario> = {
-          CLIENTE: "cliente",
-          VENDEDOR: "vendedor",
-          ADMINISTRADOR: "administrador",
-        };
-        const rol = roles[sesion.rol.toUpperCase()];
-        if (!rol) throw new Error("El backend devolvió un rol desconocido.");
-
-        sessionStorage.setItem("sonidovivo_token", sesion.token);
-        setUsuarioActual({
-          id: String(sesion.id),
-          nombre: sesion.nombre,
-          apellido: sesion.apellido ?? "",
-          fechaNacimiento: sesion.fechaNacimiento ?? "",
-          correo: sesion.email,
-          password: "",
-          direccion: sesion.direccion ?? "",
-          region: sesion.region ?? "",
-          genero: sesion.genero ?? "",
-          intentosFallidos: 0,
-          bloqueado: false,
-          rol,
-        });
+        localStorage.setItem("sonidovivo_refresh_token", sesion.refreshToken);
+        configurarTokenAcceso(sesion.token);
+        setUsuarioActual(usuarioDesdeAuth(sesion));
       },
-      cerrarSesion: () => {
+      cerrarSesion: async () => {
+        const refreshToken =
+          localStorage.getItem("sonidovivo_refresh_token") ??
+          sessionStorage.getItem("sonidovivo_refresh_token");
+        configurarTokenAcceso(null);
+        let errorCierre: string | null = null;
+        if (refreshToken) {
+          try {
+            await api.post("/auth/logout", { refreshToken });
+          } catch (error) {
+            errorCierre = errorDeApi(
+              error,
+              "La sesión local se cerró, pero no se pudo invalidar la sesión del servidor.",
+            );
+          }
+        }
         setUsuarioActual(null);
+        setCarrito([]);
+        localStorage.removeItem(CLAVE_SESION);
+        localStorage.removeItem("sonidovivo_refresh_token");
         sessionStorage.removeItem(CLAVE_SESION);
-        sessionStorage.removeItem("sonidovivo_token");
+        sessionStorage.removeItem("sonidovivo_refresh_token");
+        return errorCierre;
       },
-      guardarUsuarios: (actualizados) => {
-        const usuariosSinContrasenas = actualizados.map((usuario) => ({
-          ...usuario,
-          password: "",
-        }));
-        localStorage.setItem(
-          CLAVE_USUARIOS,
-          JSON.stringify(usuariosSinContrasenas),
+      actualizarPerfil: async (usuario) => {
+        try {
+          const { data } = await api.put<AuthResponse>("/auth/profile", {
+            nombre: usuario.nombre,
+            apellido: usuario.apellido,
+            fechaNacimiento: usuario.fechaNacimiento,
+            correo: usuario.correo,
+            direccion: usuario.direccion,
+            region: usuario.region,
+            genero: usuario.genero,
+          });
+          localStorage.setItem("sonidovivo_refresh_token", data.refreshToken);
+          configurarTokenAcceso(data.token);
+          const actualizado = usuarioDesdeAuth(data);
+          setUsuarioActual(actualizado);
+          return null;
+        } catch (error) {
+          return errorDeApi(error, "No fue posible actualizar el perfil.");
+        }
+      },
+      guardarUsuarios: async (actualizados) => {
+        if (
+          !usuarioActual ||
+          !["administrador", "vendedor"].includes(usuarioActual.rol)
+        ) {
+          return "No tienes permisos para gestionar usuarios.";
+        }
+        if (usuarioActual.rol === "administrador" && !usuariosCargados) {
+          return "La lista de usuarios aún no está disponible.";
+        }
+
+        const usuariosGuardados: Usuario[] = [];
+        const idsActualizados = new Set(
+          actualizados.map((usuario) => usuario.id),
         );
-        setUsuarios(usuariosSinContrasenas);
+        const camposEditables: (keyof Usuario)[] = [
+          "nombre",
+          "apellido",
+          "fechaNacimiento",
+          "correo",
+          "direccion",
+          "region",
+          "genero",
+          "rol",
+          "bloqueado",
+        ];
+
+        try {
+          for (const usuario of actualizados) {
+            const anterior = usuarios.find((item) => item.id === usuario.id);
+            if (!anterior) {
+              const { data } = await api.post<UsuarioApi>(
+                "/admin/usuarios",
+                payloadUsuario(usuario),
+              );
+              usuariosGuardados.push(convertirUsuarioApi(data));
+              continue;
+            }
+
+            const cambio = camposEditables.some(
+              (campo) => anterior[campo] !== usuario[campo],
+            );
+            const passwordCambiada =
+              Boolean(usuario.password) &&
+              usuario.password !== anterior.password;
+            if (!cambio && !passwordCambiada) {
+              usuariosGuardados.push(anterior);
+              continue;
+            }
+
+            const { data } = await api.put<UsuarioApi>(
+              `/admin/usuarios/${encodeURIComponent(usuario.id)}`,
+              payloadUsuario(usuario),
+            );
+            usuariosGuardados.push(convertirUsuarioApi(data));
+          }
+
+          for (const anterior of usuarios) {
+            if (!idsActualizados.has(anterior.id)) {
+              await api.delete(
+                `/admin/usuarios/${encodeURIComponent(anterior.id)}`,
+              );
+            }
+          }
+
+          if (usuarioActual.rol === "administrador") {
+            const { data } = await api.get<UsuarioApi[]>("/admin/usuarios");
+            setUsuarios(data.map(convertirUsuarioApi));
+          } else {
+            setUsuarios((actuales) => [...actuales, ...usuariosGuardados]);
+          }
+          return null;
+        } catch (error) {
+          return errorDeApi(
+            error,
+            "No fue posible guardar los cambios de usuario.",
+          );
+        }
       },
       actualizarStock: async (idProducto, stock) => {
         if (
@@ -659,7 +827,18 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         }
       },
     }),
-    [productos, categorias, carrito, usuarios, usuarioActual],
+    [
+      productos,
+      categorias,
+      catalogoCargando,
+      catalogoError,
+      usuariosCargando,
+      usuariosError,
+      usuariosCargados,
+      carrito,
+      usuarios,
+      usuarioActual,
+    ],
   );
 
   return (

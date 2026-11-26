@@ -13,7 +13,13 @@ const regiones = [
 ];
 
 export function AdminProfilesPage() {
-  const { usuarios, usuarioActual, guardarUsuarios } = useStore();
+  const {
+    usuarios,
+    usuarioActual,
+    usuariosCargando,
+    usuariosError,
+    guardarUsuarios,
+  } = useStore();
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState<"danger" | "success">(
     "success",
@@ -24,7 +30,7 @@ export function AdminProfilesPage() {
     setTipoMensaje(tipo);
   };
 
-  const modificarUsuario = (evento: FormEvent<HTMLFormElement>) => {
+  const modificarUsuario = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
     if (usuarioActual?.rol !== "administrador" || !usuarioEnEdicion) return;
 
@@ -108,20 +114,25 @@ export function AdminProfilesPage() {
       region,
       genero,
     };
-    guardarUsuarios(
+    const error = await guardarUsuarios(
       usuarios.map((usuario) =>
         usuario.id === usuarioOriginal.id ? usuarioActualizado : usuario,
       ),
     );
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
     setUsuarioEnEdicion(null);
     notificar("Perfil actualizado correctamente.", "success");
   };
 
-  const agregarUsuario = (evento: FormEvent<HTMLFormElement>) => {
+  const agregarUsuario = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
     if (usuarioActual?.rol !== "administrador") return;
 
-    const formulario = new FormData(evento.currentTarget);
+    const formElement = evento.currentTarget;
+    const formulario = new FormData(formElement);
     const rolSeleccionado = formulario.get("rol");
     if (rolSeleccionado !== "cliente" && rolSeleccionado !== "vendedor") {
       notificar("Selecciona un tipo de cuenta válido.", "danger");
@@ -197,8 +208,12 @@ export function AdminProfilesPage() {
       bloqueado: false,
       rol: rolSeleccionado,
     };
-    guardarUsuarios([...usuarios, nuevoUsuario]);
-    evento.currentTarget.reset();
+    const error = await guardarUsuarios([...usuarios, nuevoUsuario]);
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
+    formElement.reset();
     notificar(
       rolSeleccionado === "cliente"
         ? "Cliente agregado correctamente."
@@ -207,7 +222,7 @@ export function AdminProfilesPage() {
     );
   };
 
-  const eliminarUsuario = (usuario: Usuario) => {
+  const eliminarUsuario = async (usuario: Usuario) => {
     if (
       usuarioActual?.rol !== "administrador" ||
       usuario.id === usuarioActual.id
@@ -228,7 +243,13 @@ export function AdminProfilesPage() {
     ) {
       return;
     }
-    guardarUsuarios(usuarios.filter((item) => item.id !== usuario.id));
+    const error = await guardarUsuarios(
+      usuarios.filter((item) => item.id !== usuario.id),
+    );
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
     notificar(
       `Se eliminó la cuenta de ${usuario.nombre} ${usuario.apellido}.`,
       "success",
@@ -236,10 +257,21 @@ export function AdminProfilesPage() {
   };
 
   return (
-    <section className="card shadow-sm border-0">
+    <details className="card shadow-sm border-0 mb-3">
+      <summary
+        className="card-header bg-body p-4"
+        style={{ cursor: "pointer" }}
+      >
+        <h2 className="h5 fw-bold mb-0">Administración de perfiles</h2>
+      </summary>
       <div className="card-body p-4">
-        <h2 className="h4 fw-bold mb-3">Administración de perfiles</h2>
         <Mensaje texto={mensaje} tipo={tipoMensaje} />
+        <Mensaje texto={usuariosError} tipo="danger" />
+        {usuariosCargando && (
+          <p className="text-secondary" role="status">
+            Cargando usuarios…
+          </p>
+        )}
         <h3 className="h5 fw-bold mb-3">Agregar cliente o vendedor</h3>
         <form onSubmit={agregarUsuario} className="mb-5">
           <div className="row g-3">
@@ -384,10 +416,6 @@ export function AdminProfilesPage() {
                             </p>
                             <p className="mb-1">
                               <strong>Género:</strong> {usuario.genero}
-                            </p>
-                            <p className="mb-0">
-                              <strong>Estado:</strong>{" "}
-                              {usuario.bloqueado ? "Bloqueado" : "Activo"}
                             </p>
                           </div>
                         </details>
@@ -544,6 +572,6 @@ export function AdminProfilesPage() {
           </table>
         </div>
       </div>
-    </section>
+    </details>
   );
 }

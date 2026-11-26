@@ -52,7 +52,7 @@ export function VendedorPage() {
     );
     setTipoMensaje(guardado ? "success" : "danger");
   };
-  const crearCliente = (evento: FormEvent<HTMLFormElement>) => {
+  const crearCliente = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
 
     if (usuarioActual?.rol !== "vendedor") {
@@ -61,7 +61,8 @@ export function VendedorPage() {
       return;
     }
 
-    const formulario = new FormData(evento.currentTarget);
+    const formElement = evento.currentTarget;
+    const formulario = new FormData(formElement);
 
     const leer = (campo: string) => String(formulario.get(campo) ?? "").trim();
 
@@ -164,9 +165,14 @@ export function VendedorPage() {
       rol: "cliente",
     };
 
-    guardarUsuarios([...usuarios, nuevoCliente]);
+    const error = await guardarUsuarios([...usuarios, nuevoCliente]);
+    if (error) {
+      setTipoMensaje("danger");
+      setMensaje(error);
+      return;
+    }
 
-    evento.currentTarget.reset();
+    formElement.reset();
 
     setTipoMensaje("success");
     setMensaje("Cliente creado correctamente.");
@@ -182,10 +188,14 @@ export function VendedorPage() {
         </p>
       </section>
       <Mensaje texto={mensaje} tipo={tipoMensaje} />
-      <section className="card shadow-sm border-0 mb-4">
+      <details className="card shadow-sm border-0 mb-3">
+        <summary
+          className="card-header bg-body p-4"
+          style={{ cursor: "pointer" }}
+        >
+          <h2 className="h5 fw-bold mb-0">Crear cliente</h2>
+        </summary>
         <div className="card-body p-4">
-          <h2 className="h4 fw-bold mb-3">Crear cliente</h2>
-
           <p className="text-secondary">
             El vendedor puede crear únicamente cuentas con rol Cliente.
           </p>
@@ -347,11 +357,16 @@ export function VendedorPage() {
             </button>
           </form>
         </div>
-      </section>
+      </details>
 
-      <section className="card shadow-sm border-0">
+      <details className="card shadow-sm border-0 mb-3">
+        <summary
+          className="card-header bg-body p-4"
+          style={{ cursor: "pointer" }}
+        >
+          <h2 className="h5 fw-bold mb-0">Productos y existencias</h2>
+        </summary>
         <div className="card-body p-4">
-          <h2 className="h4 fw-bold mb-3">Productos y existencias</h2>
           <label className="form-label" htmlFor="buscar-productos-vendedor">
             Buscar producto
           </label>
@@ -435,7 +450,7 @@ export function VendedorPage() {
             )}
           </div>
         </div>
-      </section>
+      </details>
     </main>
   );
 }

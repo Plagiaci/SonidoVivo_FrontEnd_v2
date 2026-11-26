@@ -1,6 +1,8 @@
 import { AdminProductsPage } from "./AdminProductsPage";
 import { AdminProfilesPage } from "../admin/AdminProfilesPage";
 import { AdminCategoriesPage } from "./AdminCategoriesPage";
+import { AdminOrdersPage } from "./AdminOrdersPage";
+import { AdminReportsPage } from "./AdminReportsPage";
 
 export function AdminPage() {
   return (
@@ -11,7 +13,7 @@ export function AdminPage() {
         <h1 className="display-6 fw-bold">Gestión de la tienda</h1>
 
         <p className="text-secondary">
-          Administra los productos, las categorías y los perfiles de usuario.
+          Administra el catálogo, los usuarios, los pedidos y los reportes.
         </p>
       </section>
 
@@ -20,6 +22,10 @@ export function AdminPage() {
       <AdminCategoriesPage />
 
       <AdminProfilesPage />
+
+      <AdminOrdersPage />
+
+      <AdminReportsPage />
     </main>
   );
 }

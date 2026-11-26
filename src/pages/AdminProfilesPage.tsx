@@ -23,11 +23,12 @@ export function AdminProfilesPage() {
     setTipoMensaje(tipo);
   };
 
-  const agregarVendedor = (evento: FormEvent<HTMLFormElement>) => {
+  const agregarVendedor = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
     if (usuarioActual?.rol !== "administrador") return;
 
-    const formulario = new FormData(evento.currentTarget);
+    const formElement = evento.currentTarget;
+    const formulario = new FormData(formElement);
     const leer = (campo: string) => String(formulario.get(campo) ?? "").trim();
     const nombre = leer("nombre");
     const apellido = leer("apellido");
@@ -98,12 +99,16 @@ export function AdminProfilesPage() {
       bloqueado: false,
       rol: "vendedor",
     };
-    guardarUsuarios([...usuarios, nuevoUsuario]);
-    evento.currentTarget.reset();
+    const error = await guardarUsuarios([...usuarios, nuevoUsuario]);
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
+    formElement.reset();
     notificar("Vendedor agregado correctamente.", "success");
   };
 
-  const eliminarUsuario = (usuario: Usuario) => {
+  const eliminarUsuario = async (usuario: Usuario) => {
     if (
       usuarioActual?.rol !== "administrador" ||
       usuario.id === usuarioActual.id
@@ -124,7 +129,13 @@ export function AdminProfilesPage() {
     ) {
       return;
     }
-    guardarUsuarios(usuarios.filter((item) => item.id !== usuario.id));
+    const error = await guardarUsuarios(
+      usuarios.filter((item) => item.id !== usuario.id),
+    );
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
     notificar(
       `Se eliminó la cuenta de ${usuario.nombre} ${usuario.apellido}.`,
       "success",

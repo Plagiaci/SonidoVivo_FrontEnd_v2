@@ -121,9 +121,14 @@ export function AdminProductsPage() {
   };
 
   return (
-    <section className="card shadow-sm border-0 mb-5">
+    <details className="card shadow-sm border-0 mb-3">
+      <summary
+        className="card-header bg-body p-4"
+        style={{ cursor: "pointer" }}
+      >
+        <h2 className="h5 fw-bold mb-0">Administración de productos</h2>
+      </summary>
       <div className="card-body p-4">
-        <h2 className="h4 fw-bold mb-3">Administración de productos</h2>
         <Mensaje texto={mensaje} tipo={tipoMensaje} />
         <h3 className="h5 mt-4 mb-3">Crear producto</h3>
 
@@ -342,6 +347,6 @@ export function AdminProductsPage() {
           </form>
         )}
       </div>
-    </section>
+    </details>
   );
 }

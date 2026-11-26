@@ -26,7 +26,13 @@ export function AdminUserManagement({
   rol: RolGestionado;
   nombreRol: string;
 }) {
-  const { usuarios, usuarioActual, guardarUsuarios } = useStore();
+  const {
+    usuarios,
+    usuarioActual,
+    usuariosCargando,
+    usuariosError,
+    guardarUsuarios,
+  } = useStore();
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState<"danger" | "success">(
     "success",
@@ -108,10 +114,11 @@ export function AdminUserManagement({
     return datos;
   };
 
-  const crearUsuario = (evento: FormEvent<HTMLFormElement>) => {
+  const crearUsuario = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
     if (usuarioActual?.rol !== "administrador") return;
-    const formulario = new FormData(evento.currentTarget);
+    const formElement = evento.currentTarget;
+    const formulario = new FormData(formElement);
     const datos = validarDatos(formulario);
     if (!datos) return;
 
@@ -134,12 +141,16 @@ export function AdminUserManagement({
       bloqueado: false,
       rol,
     };
-    guardarUsuarios([...usuarios, nuevoUsuario]);
-    evento.currentTarget.reset();
+    const error = await guardarUsuarios([...usuarios, nuevoUsuario]);
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
+    formElement.reset();
     notificar(`${nombreRol} creado correctamente.`, "success");
   };
 
-  const modificarUsuario = (
+  const modificarUsuario = async (
     evento: FormEvent<HTMLFormElement>,
     usuarioId: string,
   ) => {
@@ -160,16 +171,20 @@ export function AdminUserManagement({
     const datos = validarDatos(new FormData(evento.currentTarget), usuarioId);
     if (!datos) return;
     const usuarioActualizado: Usuario = { ...usuarioOriginal, ...datos };
-    guardarUsuarios(
+    const error = await guardarUsuarios(
       usuarios.map((usuario) =>
         usuario.id === usuarioId ? usuarioActualizado : usuario,
       ),
     );
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
     setUsuarioEnEdicion(null);
     notificar("Perfil actualizado correctamente.", "success");
   };
 
-  const eliminarUsuario = (usuario: Usuario) => {
+  const eliminarUsuario = async (usuario: Usuario) => {
     if (usuarioActual?.rol !== "administrador" || usuario.rol !== rol) return;
     if (
       !window.confirm(
@@ -178,7 +193,13 @@ export function AdminUserManagement({
     ) {
       return;
     }
-    guardarUsuarios(usuarios.filter((item) => item.id !== usuario.id));
+    const error = await guardarUsuarios(
+      usuarios.filter((item) => item.id !== usuario.id),
+    );
+    if (error) {
+      notificar(error, "danger");
+      return;
+    }
     if (usuarioEnEdicion === usuario.id) setUsuarioEnEdicion(null);
     notificar(
       `Se eliminó la cuenta de ${usuario.nombre} ${usuario.apellido}.`,
@@ -193,6 +214,12 @@ export function AdminUserManagement({
       <div className="card-body p-4">
         <h3 className="h5 fw-bold mb-3">Gestión de {nombreRolPlural}</h3>
         <Mensaje texto={mensaje} tipo={tipoMensaje} />
+        <Mensaje texto={usuariosError} tipo="danger" />
+        {usuariosCargando && (
+          <p className="text-secondary" role="status">
+            Cargando usuarios…
+          </p>
+        )}
         <details className="mb-4">
           <summary className="btn btn-outline-primary">
             Crear {nombreRol.toLowerCase()}
@@ -277,10 +304,6 @@ export function AdminUserManagement({
                             </p>
                             <p className="mb-1">
                               <strong>Género:</strong> {usuario.genero}
-                            </p>
-                            <p className="mb-0">
-                              <strong>Estado:</strong>{" "}
-                              {usuario.bloqueado ? "Bloqueado" : "Activo"}
                             </p>
                           </div>
                         </details>

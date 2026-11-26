@@ -15,7 +15,7 @@ const regiones = [
 const generos = ["Masculino", "Femenino", "Otro", "Prefiero no indicar"];
 
 export function Perfil() {
-  const { usuarioActual, usuarios, guardarUsuarios } = useStore();
+  const { usuarioActual, actualizarPerfil } = useStore();
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState<"danger" | "success">(
     "success",
@@ -29,7 +29,7 @@ export function Perfil() {
     );
   }
 
-  const guardarPerfil = (evento: FormEvent<HTMLFormElement>) => {
+  const guardarPerfil = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
     const formulario = new FormData(evento.currentTarget);
     const leer = (campo: string) => String(formulario.get(campo) ?? "").trim();
@@ -75,34 +75,21 @@ export function Perfil() {
       setMensaje("Debes tener al menos 14 años.");
       return;
     }
-    if (
-      usuarios.some(
-        (usuario) =>
-          usuario.id !== usuarioActual.id &&
-          usuario.correo.toLowerCase() === correo,
-      )
-    ) {
+    const error = await actualizarPerfil({
+      ...usuarioActual,
+      nombre,
+      apellido,
+      fechaNacimiento,
+      correo,
+      direccion,
+      region,
+      genero,
+    });
+    if (error) {
       setTipoMensaje("danger");
-      setMensaje("Ya existe una cuenta con ese correo.");
+      setMensaje(error);
       return;
     }
-
-    guardarUsuarios(
-      usuarios.map((usuario) =>
-        usuario.id === usuarioActual.id
-          ? {
-              ...usuario,
-              nombre,
-              apellido,
-              fechaNacimiento,
-              correo,
-              direccion,
-              region,
-              genero,
-            }
-          : usuario,
-      ),
-    );
     setTipoMensaje("success");
     setMensaje("Tu perfil se actualizó correctamente.");
   };

@@ -99,10 +99,14 @@ export function AdminCategoriesPage() {
   };
 
   return (
-    <section className="card shadow-sm border-0 mb-5">
+    <details className="card shadow-sm border-0 mb-3">
+      <summary
+        className="card-header bg-body p-4"
+        style={{ cursor: "pointer" }}
+      >
+        <h2 className="h5 fw-bold mb-0">Administración de categorías</h2>
+      </summary>
       <div className="card-body p-4">
-        <h2 className="h4 fw-bold mb-3">Administración de categorías</h2>
-
         <Mensaje texto={mensaje} tipo={tipoMensaje} />
 
         <h3 className="h5 mt-4">Crear categoría</h3>
@@ -178,6 +182,6 @@ export function AdminCategoriesPage() {
           </>
         )}
       </div>
-    </section>
+    </details>
   );
 }

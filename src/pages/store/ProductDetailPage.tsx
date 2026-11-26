@@ -7,9 +7,39 @@ import { formatearPrecio } from "../../utils/formatoPrecio";
 
 export function Detalle() {
   const { id } = useParams();
-  const { productos, agregarAlCarrito, usuarioActual } = useStore();
+  const {
+    productos,
+    agregarAlCarrito,
+    usuarioActual,
+    catalogoCargando,
+    catalogoError,
+  } = useStore();
   const [mensaje, setMensaje] = useState("");
   const producto = productos.find((elemento) => elemento.id === id);
+
+  if (catalogoCargando) {
+    return (
+      <main className="container py-5">
+        <p className="text-secondary" role="status">
+          Cargando producto…
+        </p>
+      </main>
+    );
+  }
+
+  if (catalogoError) {
+    return (
+      <main className="container py-5">
+        <Link to="/catalogo" className="btn btn-outline-secondary mb-4">
+          Volver al catálogo
+        </Link>
+        <div className="alert alert-danger" role="alert">
+          No fue posible consultar el producto porque el catálogo no está
+          disponible.
+        </div>
+      </main>
+    );
+  }
 
   if (!producto) {
     return (
@@ -58,7 +88,9 @@ export function Detalle() {
                   <p className="detail-value">
                     Stock disponible: {producto.stock}
                   </p>
-                  {usuarioActual?.rol === "cliente" ? (
+                  {usuarioActual &&
+                  (usuarioActual.rol === "cliente" ||
+                    usuarioActual.rol === "vendedor") ? (
                     <div className="d-grid mt-4">
                       <button
                         className="btn btn-primary btn-lg"
@@ -83,7 +115,7 @@ export function Detalle() {
                     </Link>
                   ) : (
                     <p className="text-secondary mt-4">
-                      Las cuentas de personal no pueden comprar.
+                      Esta cuenta no puede comprar.
                     </p>
                   )}
                   <Mensaje texto={mensaje} tipo="success" />

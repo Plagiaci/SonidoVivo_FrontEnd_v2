@@ -3,7 +3,7 @@ import { ProductoCard } from "../../components/ProductoCard";
 import { useStore } from "../../context/StoreContext";
 
 export function Catalogo() {
-  const { productos } = useStore();
+  const { productos, catalogoCargando, catalogoError } = useStore();
   const [categoria, setCategoria] = useState("");
   const [precioMaximo, setPrecioMaximo] = useState("");
   const categorias = [
@@ -62,17 +62,21 @@ export function Catalogo() {
           </div>
         </div>
       </section>
-      {filtrados.length ? (
+      {catalogoCargando ? (
+        <p className="text-secondary" role="status">
+          Cargando productos…
+        </p>
+      ) : filtrados.length ? (
         <div className="row g-4">
           {filtrados.map((producto) => (
             <ProductoCard key={producto.id} producto={producto} />
           ))}
         </div>
-      ) : (
+      ) : !catalogoError ? (
         <div className="alert alert-light border text-center">
           No se encontraron productos.
         </div>
-      )}
+      ) : null}
     </main>
   );
 }

@@ -1,14 +1,36 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { api } from "../api/axiosConfig";
 import { Mensaje } from "../components/PageHelpers";
 import { useStore, type AuthResponse } from "../context/StoreContext";
 
+const cuentasDePrueba = import.meta.env.DEV
+  ? [
+      {
+        rol: "Cliente",
+        correo: import.meta.env.VITE_DEMO_CLIENTE_EMAIL ?? "",
+        password: import.meta.env.VITE_DEMO_CLIENTE_PASSWORD ?? "",
+      },
+      {
+        rol: "Vendedor",
+        correo: import.meta.env.VITE_DEMO_VENDEDOR_EMAIL ?? "",
+        password: import.meta.env.VITE_DEMO_VENDEDOR_PASSWORD ?? "",
+      },
+      {
+        rol: "Administrador",
+        correo: import.meta.env.VITE_DEMO_ADMIN_EMAIL ?? "",
+        password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD ?? "",
+      },
+    ].filter((cuenta) => cuenta.correo && cuenta.password)
+  : [];
+
 export function Login() {
   const { establecerSesion } = useStore();
   const [mensaje, setMensaje] = useState("");
   const navigate = useNavigate();
+  const correoInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
 
   const iniciarSesion = async (evento: FormEvent<HTMLFormElement>) => {
     evento.preventDefault();
@@ -63,6 +85,7 @@ export function Login() {
                     name="correo"
                     type="email"
                     autoComplete="email"
+                    ref={correoInput}
                   />
                 </div>
                 <div className="mb-3">
@@ -75,6 +98,7 @@ export function Login() {
                     name="password"
                     type="password"
                     autoComplete="current-password"
+                    ref={passwordInput}
                   />
                 </div>
                 <div className="d-grid mt-4">
@@ -90,6 +114,51 @@ export function Login() {
               </p>
             </div>
           </section>
+          {import.meta.env.DEV && (
+            <section className="card border-info shadow-sm mt-4">
+              <div className="card-body p-4">
+                <h2 className="h5 fw-bold">Usuarios de prueba</h2>
+                <p className="small text-secondary">
+                  Solo para desarrollo local. Usa cuentas ficticias, nunca
+                  credenciales reales.
+                </p>
+                {cuentasDePrueba.map((cuenta) => (
+                  <div className="border rounded p-3 mb-2" key={cuenta.rol}>
+                    <div className="d-flex justify-content-between align-items-start gap-2">
+                      <div className="small">
+                        <strong>{cuenta.rol}</strong>
+                        <div>Correo: {cuenta.correo}</div>
+                        <div>
+                          Contraseña: <code>{cuenta.password}</code>
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-sm btn-outline-primary flex-shrink-0"
+                        type="button"
+                        onClick={() => {
+                          if (correoInput.current) {
+                            correoInput.current.value = cuenta.correo;
+                          }
+                          if (passwordInput.current) {
+                            passwordInput.current.value = cuenta.password;
+                          }
+                          setMensaje("");
+                        }}
+                      >
+                        Completar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {cuentasDePrueba.length < 3 && (
+                  <p className="small text-secondary mb-0">
+                    Configura las cuentas en el archivo local `.env.local` para
+                    mostrarlas aquí.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </main>

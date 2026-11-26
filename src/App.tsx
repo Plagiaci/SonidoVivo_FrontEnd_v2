@@ -21,6 +21,7 @@ import { VendedorPage } from "./pages/VendedorPage";
 import { Login } from "./pages/LoginPage";
 import { Registro } from "./pages/RegistroPage";
 import { HistorialPedidos } from "./pages/store/HistorialPedidos";
+import { useStore } from "./context/StoreContext";
 
 function Aplicacion() {
   return (
@@ -28,6 +29,7 @@ function Aplicacion() {
       <BrowserRouter>
         <div className="app-shell">
           <Header />
+          <EstadoCatalogo />
           <Routes>
             <Route path="/" element={<Inicio />} />
             <Route path="/catalogo" element={<Catalogo />} />
@@ -110,6 +112,32 @@ function Aplicacion() {
       </BrowserRouter>
     </StoreProvider>
   );
+}
+
+function EstadoCatalogo() {
+  const { catalogoCargando, catalogoError } = useStore();
+
+  if (catalogoError) {
+    return (
+      <div className="container pt-3">
+        <div className="alert alert-danger mb-0" role="alert">
+          {catalogoError}
+        </div>
+      </div>
+    );
+  }
+
+  if (catalogoCargando) {
+    return (
+      <div className="container pt-3">
+        <p className="text-secondary mb-0" role="status">
+          Cargando catálogo…
+        </p>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default Aplicacion;

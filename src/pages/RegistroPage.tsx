@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { isAxiosError } from "axios";
-import { api } from "../api/axiosConfig";
+import { authService } from "../services/authService";
 import { Mensaje } from "../components/PageHelpers";
 
 export function Registro() {
@@ -77,28 +77,36 @@ export function Registro() {
     }
 
     try {
-      await api.post("/auth/register", {
-        nombre,
-        apellido,
-        correo,
-        password,
-        fechaNacimiento,
-        direccion,
-        region,
-        genero,
-      });
+     await authService.registrar({
+  nombre,
+  email: correo,
+  password,
+});
       setExito(true);
       setMensaje("Usuario registrado correctamente. Ya puedes iniciar sesión.");
       formElement.reset();
-    } catch (error) {
-      setExito(false);
-      setMensaje(
-        isAxiosError<{ error?: string }>(error)
-          ? (error.response?.data?.error ??
-              "No fue posible conectar con el servidor.")
-          : "No fue posible registrar la cuenta.",
-      );
-    }
+    }  catch (error) {
+  setExito(false);
+
+  if (
+    isAxiosError<{
+      mensaje?: string;
+      error?: string;
+      detail?: string;
+    }>(error)
+  ) {
+    setMensaje(
+      error.response?.data?.mensaje ??
+        error.response?.data?.detail ??
+        error.response?.data?.error ??
+        "No fue posible conectar con el servidor.",
+    );
+  } else {
+    setMensaje(
+      "No fue posible registrar la cuenta.",
+    );
+  }
+}
   };
 
   return (

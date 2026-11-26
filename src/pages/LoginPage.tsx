@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
-import { api } from "../api/axiosConfig";
+import { authApi } from "../api/axiosConfig";
 import { Mensaje } from "../components/PageHelpers";
 import { useStore, type AuthResponse } from "../context/StoreContext";
 
@@ -44,16 +44,14 @@ export function Login() {
     if (!password) return setMensaje("Debe ingresar su contraseña.");
 
     try {
-      const { data } = await api.post<AuthResponse>(
-        "/auth/login",
-        {
-          correo,
-          password,
-        },
-        {
-          withCredentials: true,
-        },
-      );
+      const { data } =
+  await authApi.post<AuthResponse>(
+    "/login",
+    {
+      email: correo,
+      password,
+    },
+  );
       establecerSesion(data);
       navigate(data.rol === "CLIENTE" ? "/catalogo" : "/gestion");
       formElement.reset();
